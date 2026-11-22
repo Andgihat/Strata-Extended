@@ -58,7 +58,9 @@
   "model": "E:\\AI-models\\models\\Qwen3.8-Flash-Next-Gyro\\Qwen3.8-Flash-Next-Gyro-S-TQ1_0.gguf",
   "gpu": false,
   "max_tokens": 300,
-  "threads": 6
+  "threads": 6,
+  "elastic": true,
+  "elastic_idle_s": 60
  },
  "args_written": [
   "--pack",

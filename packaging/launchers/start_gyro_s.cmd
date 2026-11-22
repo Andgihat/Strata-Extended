@@ -42,14 +42,14 @@ echo   Architecture: MoE ~125B (512 experts, Ternary TQ1_0)
 echo   Speculation:  DFlash2 Trellis Viterbi + Native Head (100%% Bit-Exact Parity)
 echo   KV Cache:     Hardware INT8/FP8 Blackwell sm_120 (32K VRAM Resident, 0 PCIe Lag)
 echo   Context:      Full 256,000 tokens (256K, 32K sliding window)
-echo   Memory:       8,203 VRAM slots (8.02 GB) + 17.4-18.8 GB RAM Lock (0 MB SSD Read)
+echo   Memory:       8,203 VRAM slots (8.02 GB) + 15.65 GB RAM Lock (0 MB SSD Read)
 echo   CPU Pool:     512-bit Zen 5 AVX-512 VNNI (9.9-11.4 GB/s, 10.6 ms call)
 echo   MoE Prefetch: Foresight Swap + Predictive Overlapped DMA (Zero PCIe Lag)
-echo   Multimodal:   Vision CPU (mmproj-Qwen3.8-Flash-Next-BF16.gguf, 6 threads)
+echo   Multimodal:   Vision CPU (On-Demand Elastic: 0 MB RAM until image requested)
 echo   GPU:          NVIDIA RTX 5060 Ti 16 GB VRAM
 echo   API Port:     %PORT% (http://127.0.0.1:%PORT%/v1)
 echo ------------------------------------------------------------
-"%PYTHON_EXE%" -c "import psutil; vm = psutil.virtual_memory(); avail = vm.available / (1024**3); print(f'   Доступно ОЗУ: {avail:.1f} ГБ ' + ('[ВНИМАНИЕ: Для 0 MB SSD read и ~95-105 t/s требуется ~18.5 ГБ! Закройте тяжелые вкладки/программы]' if avail < 18.0 else '[ОТЛИЧНО: Полный RAM Lock активен!]'))"
+"%PYTHON_EXE%" -c "import psutil; vm = psutil.virtual_memory(); avail = vm.available / (1024**3); print(f'   Доступно ОЗУ: {avail:.1f} ГБ ' + ('[ОТЛИЧНО: 15.65 ГБ для полного RAM Lock с 0 MB SSD read доступно!]' if avail >= 15.6 else f'[ЧАСТИЧНЫЙ RAM LOCK: {avail:.1f} ГБ из 15.65 ГБ]'))"
 echo ------------------------------------------------------------
 echo   [1] DFlash2 + PURE QUALITY [Tail-Skip 0, 100%% MoE, ~65-72 t/s, 32K Cache]
 echo   [2] DFlash2 + BALANCED     [Tail-Skip 5, Trellis Viterbi ~82-88 t/s, 32K Cache]
@@ -120,6 +120,10 @@ goto run
 
 :run
 echo.
+echo   ^>^> Cleaning up any lingering Strata processes...
+taskkill /F /IM strata.exe /FI "STATUS eq RUNNING" >nul 2>&1
+taskkill /F /IM strata-vision.exe /FI "STATUS eq RUNNING" >nul 2>&1
+
 echo   ^>^> Starting Strata HTTP API Server for Gyro-S...
 echo   ^>^> OpenAI API: http://127.0.0.1:%PORT%/v1
 echo   ^>^> Web Chat:   http://127.0.0.1:%PORT%/

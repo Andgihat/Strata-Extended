@@ -57,7 +57,9 @@
   "model": "E:\\AI-models\\Sakura-Qwen3.8-Flash-Next-Gyro-M-K512-TQ2_0-CP2-v1.gguf",
   "gpu": false,
   "max_tokens": 300,
-  "threads": 6
+  "threads": 6,
+  "elastic": true,
+  "elastic_idle_s": 60
  },
  "env": {
   "STRATA_ROUTE_PRIOR": "0",
