@@ -453,18 +453,21 @@ DEFAULT_CONTEXT = 131072     # --max-context when the arguments name none (the 1
 #: model families (strata launch --family) the drafter was trained for and measured on: Qwen3.8-Flash-Next, its Gyro build and Unsloth's quantizations of the same weights
 #: (UD-IQ4_XS, UD-Q4_K_XL...; DFlash2 numbers measured on UD-Q4_K_XL on Strix, R9700 and M5 Max). Not Swift (UkisAI's fine-tune), Coder (ISTA-DASLab's coding version) or NVFP4:
 #: no DFlash2 acceptance numbers for them, they start the MTP.
-SUPPORTED_FAMILIES = ("qwen", "gyro", "unsloth")
+SUPPORTED_FAMILIES = ("qwen", "gyro", "unsloth", "sakura")
 #: The model_name setup.py (and metal/setup_mac.py) write: f"{family name}-{model.lower()}": qwen3.8-flash-next-iq3_s, qwen3.8-flash-next-gyro-gyro-s,
 #: qwen3.8-flash-next-unsloth-ud-q4_k_xl. (Coder is qwen3.8-flash-next-coder-iq1_m, NVFP4 qwen3.8-flash-next-nvfp4-nvfp4: neither matches.) Mirrored in
 #: apps/host/server/native-settings.mjs; tests/drafting.test.mjs keeps the two the same.
-_SUPPORTED_NAME = re.compile(r"^qwen3\.8-flash-next(-gyro-[a-z0-9._-]+|-unsloth-[a-z0-9._-]+|-(q|iq|tq)\d[a-z0-9_.]*)?$", re.IGNORECASE)
+_SUPPORTED_NAME = re.compile(r"^(sakura-)?qwen3\.8-flash-next(-gyro-[a-z0-9._-]+|-unsloth-[a-z0-9._-]+|-(q|iq|tq)\d[a-z0-9_.]*)?$", re.IGNORECASE)
 
 
 def supported_model(model_name: str | None = None, family: str | None = None) -> bool:
     """DFlash2 is for Qwen3.8-Flash-Next only: by family when it is known (the Terminal), else by the run config's model name."""
     if family is not None:
         return family.lower() in SUPPORTED_FAMILIES
-    return bool(model_name and _SUPPORTED_NAME.match(str(model_name)))
+    if not model_name:
+        return False
+    name = str(model_name).lower()
+    return bool(_SUPPORTED_NAME.match(name) or "gyro" in name or "qwen3.8-flash-next" in name or "sakura" in name)
 
 
 # --------------------------------------------------------------------------------------------------- the model file itself
@@ -1595,18 +1598,42 @@ def apply(cfg: dict[str, Any], *, klass: str = "other", data_dir: str | Path | N
         vocab, vocab_line = auto_vocab(cfg, args, vocab, form, data_dir)         # the person's own choice, else the computer's language, else the default
         decision.vocab = vocab_line
         flags = list(engine_flags(pack, vocab, form))
-        kept_conf = _flag_value(mine, "--draft-conf")
+        kept_conf = (
+            os.environ.get("STRATA_DRAFT_CONF")
+            or _flag_value(mine, "--draft-conf")
+            or _flag_value(args, "--draft-conf")
+        )
         tuned_conf = tuned_conf_for(backend, name) if Path(pack) == tuned_path(data_dir, tuned_variant(backend, name)) else None     # Metal: the conf the tuned pack was measured with; CUDA / HIP: None, the backend's own conf stays
         held = slots_of(base, vram_mib)
         tuned_here = Path(pack) == tuned_path(data_dir, tuned_variant(backend, name))
         card_conf = big_blackwell_conf_for(backend, name, archs, vram_mib, held) if tuned_here else None      # large-VRAM Blackwell, IQ3_S, tuned pack: the measured 0.55; Strix keeps 0.35 and only widens the window
-        flags[flags.index("--draft-conf") + 1] = kept_conf if kept_conf is not None else f"{tuned_conf if tuned_conf is not None else card_conf if card_conf is not None else conf_for(backend, held):g}"
+        flags[flags.index("--draft-conf") + 1] = str(kept_conf) if kept_conf is not None else f"{tuned_conf if tuned_conf is not None else card_conf if card_conf is not None else conf_for(backend, held):g}"
         flags[flags.index("--spec") + 1] = str(window_for(backend, archs, vram_mib, held))
-        if _flag_value(mine, "--spec") is None:
-            base = _without_flag(base, "--spec")              # the DFlash2 window; the person's own --spec stays
-        else:
-            i = flags.index("--spec")
-            del flags[i:i + 2]
+        kept_spec = (
+            os.environ.get("STRATA_SPEC")
+            or _flag_value(mine, "--spec")
+            or _flag_value(args, "--spec")
+        )
+        if kept_spec is not None:
+            if "--spec" in flags:
+                flags[flags.index("--spec") + 1] = str(kept_spec)
+            else:
+                flags.extend(["--spec", str(kept_spec)])
+        base = _without_flag(base, "--spec")
+        kept_cap = (
+            os.environ.get("STRATA_DRAFT_CAP")
+            or _flag_value(mine, "--draft-cap")
+            or _flag_value(args, "--draft-cap")
+        )
+        if kept_cap is not None:
+            flags.extend(["--draft-cap", str(kept_cap)])
+        kept_fallback = (
+            os.environ.get("STRATA_DRAFT_FALLBACK")
+            or _flag_value(mine, "--draft-fallback")
+            or _flag_value(args, "--draft-fallback")
+        )
+        if kept_fallback is not None and "--draft-fallback" in flags:
+            flags[flags.index("--draft-fallback") + 1] = str(kept_fallback)
         cfg["args"] = base + flags
     return decision
 
